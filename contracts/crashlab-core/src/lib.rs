@@ -12,6 +12,12 @@ pub use seed_validator::{SeedSchema, SeedValidationError, Validate};
 pub mod scheduler;
 pub use scheduler::{Mutator, SchedulerError, WeightedScheduler};
 
+pub mod env_fingerprint;
+pub use env_fingerprint::{
+    EnvironmentFingerprint, ReplayEnvironmentReport, check_bundle_replay_environment,
+    check_replay_environment,
+};
+
 /// Wrapper for the legacy bit-flipper mutation logic.
 pub struct DefaultMutator;
 
@@ -62,6 +68,18 @@ pub fn compute_signature_hash(category: &str, payload: &[u8]) -> u64 {
 pub struct CaseBundle {
     pub seed: CaseSeed,
     pub signature: CrashSignature,
+    /// Host environment captured when the bundle was produced, if enabled.
+    pub environment: Option<EnvironmentFingerprint>,
+}
+
+impl CaseBundle {
+    /// Compares the stored fingerprint (if any) with `current` for replay safety.
+    pub fn replay_environment_report(
+        &self,
+        current: &EnvironmentFingerprint,
+    ) -> ReplayEnvironmentReport {
+        check_replay_environment(self.environment.as_ref(), current)
+    }
 }
 
 pub fn mutate_seed(seed: &CaseSeed) -> CaseSeed {
@@ -110,6 +128,19 @@ pub fn to_bundle(seed: CaseSeed) -> CaseBundle {
     CaseBundle {
         seed: mutated,
         signature,
+        environment: None,
+    }
+}
+
+/// Like [`to_bundle`], but attaches [`EnvironmentFingerprint::capture`] for replay checks.
+pub fn to_bundle_with_environment(seed: CaseSeed) -> CaseBundle {
+    let environment = Some(EnvironmentFingerprint::capture());
+    let mutated = mutate_seed(&seed);
+    let signature = classify(&mutated);
+    CaseBundle {
+        seed: mutated,
+        signature,
+        environment,
     }
 }
 
@@ -146,6 +177,55 @@ mod tests {
         };
         let bundle = to_bundle(seed);
         assert!(!bundle.signature.category.is_empty());
+    }
+
+    #[test]
+    fn to_bundle_has_no_environment_by_default() {
+        let bundle = to_bundle(CaseSeed {
+            id: 1,
+            payload: vec![1],
+        });
+        assert!(bundle.environment.is_none());
+    }
+
+    #[test]
+    fn to_bundle_with_environment_captures_fingerprint() {
+        let bundle = to_bundle_with_environment(CaseSeed {
+            id: 1,
+            payload: vec![1],
+        });
+        let fp = bundle.environment.as_ref().expect("fingerprint");
+        assert_eq!(fp.os, std::env::consts::OS);
+        assert_eq!(fp.arch, std::env::consts::ARCH);
+    }
+
+    #[test]
+    fn replay_environment_report_clean_when_capture_matches_bundle() {
+        let bundle = to_bundle_with_environment(CaseSeed {
+            id: 1,
+            payload: vec![1, 2, 3],
+        });
+        let current = EnvironmentFingerprint::capture();
+        let report = bundle.replay_environment_report(&current);
+        assert!(!report.material_mismatch);
+        assert!(report.warnings.is_empty());
+    }
+
+    #[test]
+    fn replay_environment_report_warns_when_recorded_os_differs() {
+        let mut bundle = to_bundle(CaseSeed {
+            id: 1,
+            payload: vec![1],
+        });
+        bundle.environment = Some(EnvironmentFingerprint::new(
+            "fictional-os",
+            std::env::consts::ARCH,
+            std::env::consts::FAMILY,
+            "0.0.0",
+        ));
+        let report = bundle.replay_environment_report(&EnvironmentFingerprint::capture());
+        assert!(report.material_mismatch);
+        assert!(report.warnings.iter().any(|w| w.contains("os")));
     }
 
     // ── signature_hash stability ──────────────────────────────────────────────

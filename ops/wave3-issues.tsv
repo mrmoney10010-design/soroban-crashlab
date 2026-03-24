@@ -47,7 +47,7 @@ Capture RPC request response envelopes|medium|area:runtime|type:feature|Store sa
 Add run cancellation command|trivial|area:runtime|type:task|Allow maintainers to cancel active runs gracefully.|Cancelled runs end in terminal state with partial summary.|
 Add stale run detector|trivial|area:runtime|type:task|Detect and mark runs that stop producing progress for too long.|Detector marks stale status and surfaces recovery hint.|
 Implement run resume from checkpoint|high|area:runtime|type:feature|Resume interrupted campaigns from persisted checkpoints.|Resumed run continues from last checkpoint without reprocessing completed seeds.|
-Add environment fingerprinting to bundles|medium|area:runtime|type:feature|Record runtime environment details for replay consistency checks.|Replay warns when environment fingerprint differs materially.|
+Add environment fingerprinting to bundles|medium|area:runtime|type:feature|Record runtime environment details for replay consistency checks.|Replay warns when environment fingerprint differs materially.|implemented
 Add failure artifact compression|trivial|area:runtime|type:task|Compress stored artifacts to reduce disk footprint of long campaigns.|Compression reduces storage while preserving artifact integrity.|
 Add retention policy for run artifacts|medium|area:runtime|type:feature|Apply configurable retention windows for old run artifacts.|Policy can keep latest failures while pruning old non-critical data.|
 Implement run health summary endpoint|medium|area:runtime|type:feature|Provide health summary with throughput failures and queue depth metrics.|Endpoint returns machine-readable summary for dashboard polling.|
