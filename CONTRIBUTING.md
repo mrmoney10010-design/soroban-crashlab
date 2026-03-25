@@ -33,59 +33,42 @@ cargo test
 - tests cover the introduced behavior
 - docs are updated when user-facing behavior changes
 
-## Issue Complexity Rubric
+## Security Guidance for Contributors
+When adding new fuzz input handling:
+- Treat all input as fully adversarial: assume any data entering via `CaseSeed` is malicious.
+- Validate using `SeedSchema`: all new entry points that accept external seeds must validate them against a `SeedSchema` (from `seed_validator.rs`). Use the default schema or define appropriate bounds.
+- Handle validation errors gracefully: do not panic on malformed input. Return errors or skip execution with a clear log. The `validate` method returns `Result<(), Vec<SeedValidationError>>`; propagate or handle these errors.
+- Do not derive storage paths from untrusted data: if your code writes artifacts, never use raw payloads, seed IDs, or user-controlled strings in filenames. Use `compute_signature_hash` to generate safe identifiers.
 
-### Trivial
-**Definition:**
-Small, self-contained tasks that require minimal context. Often focused on straightforward updates, UI tweaks, or simple configuration mapping.
+When modifying artifact storage:
+- Sanitize filenames: if deriving a name from untrusted data, remove path separators (`/`, `\`), null bytes, and relative path components (`..`). Prefer the signature hash.
+- Prevent path traversal: ensure all path constructions use a safe base directory and resolve the final path to confirm it stays within the intended directory.
+- Set file permissions: when creating files or directories, set permissions explicitly (e.g., `0o644` for files, `0o755` for directories). Do not rely on default umask.
+- Handle storage exhaustion: catch I/O errors such as `ENOSPC` (no space left) and fail gracefully with a clear error message.
 
-**Characteristics:**
-- Size of change is small (usually 1-2 files)
-- Very low risk of regression
-- No complex architectural or design decision-making needed
-- Straightforward testing
+Security review checklist for PRs touching fuzz input or artifact storage:
+- [ ] All new seed entry points call `validate` with an appropriate `SeedSchema`.
+- [ ] Validation errors are handled without panicking.
+- [ ] No code derives filenames directly from payload or seed ID without sanitization.
+- [ ] If filenames are derived from untrusted data, is there explicit sanitization (remove path separators, resolve path)?
+- [ ] File creation uses explicit permissions (e.g., `OpenOptions::new().mode(0o644)`).
+- [ ] Storage I/O errors are handled and do not cause silent data loss.
+- [ ] New code does not introduce null-byte vulnerabilities (e.g., by passing payloads to C APIs without checks).
 
-**Examples:**
-- Implement seed schema validator
-- Build run history table UI
-- Add markdown rendering for issue-ready reports
-
----
-
-### Medium
-**Definition:**
-Standard features or enhancements requiring moderate context. Involves implementing distinct workflows, new components, or integrating existing services.
-
-**Characteristics:**
-- Size of change is moderate (may touch multiple files in one area)
-- Moderate risk requiring specific test coverage for new failure modes
-- Requires some component-level design choices within established patterns
-- Clear boundaries of impact
-
-**Examples:**
-- Build failure classification taxonomy
-- Add replay command for single seed
-- Add signature trend charts
-
----
-
-### High
-**Definition:**
-Complex features, fundamental behavior changes, or cross-cutting architectural work. Requires deep context of the system and rigorous validation.
-
-**Characteristics:**
-- Size of change is significant (modifies core execution paths)
-- High risk or broad impact across the codebase
-- Involves novel algorithms, complex state management, or deep architectural design
-- Requires extensive test coverage, performance benchmarking, or careful review
-
-**Examples:**
-- Add authorization mode matrix runner
-- Export failing seed as Rust regression fixture
-- Implement seed prioritization by novelty
 
 ## Review expectations
 
-- maintainers prioritize active Wave issues during the sprint window
-- contributors should respond to review comments within 24 hours when possible
-- unresolved architectural debates should move to issue discussion to keep PRs focused
+- Maintainers prioritize active Wave issues during the sprint window
+- Contributors should respond to review comments within 24 hours when possible
+- Unresolved architectural debates should move to issue discussion to keep PRs focused
+
+## Resolution policy
+
+- If work quality is acceptable but merge is blocked for external reasons, resolve per Wave guidance so contributor effort is credited
+- Move partial work to follow-up issues with clear boundaries
+
+## Post-resolution feedback
+
+- Leave practical, direct feedback
+- Highlight what was done well and what should improve
+- Keep comments specific to code and collaboration behavior

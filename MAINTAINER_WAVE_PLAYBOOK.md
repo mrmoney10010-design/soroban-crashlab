@@ -66,6 +66,43 @@ Review inside 24 hours to prevent unnecessary automated appeals. Review in this 
 4. Test coverage
 5. Clarity and maintainability
 
+## Operational Security Assumptions
+
+### Deployment Trust Assumptions
+- The fuzzer runs in an isolated CI environment with no network access to external services during execution.
+- Artifact storage is configured by the operator with appropriate permissions (e.g., `0o644` for files, `0o755` for directories) to balance reproducibility and security.
+- All security-critical operations (e.g., classification, signature hashing) are deterministic and do not rely on external state.
+
+### Reviewing PRs that touch security-relevant areas
+When reviewing changes to fuzz input handling:
+- Ensure all new entry points that accept external seeds call `SeedSchema::validate` (or equivalent) before using the seed.
+- Verify that validation errors are handled without panicking; the code should return errors or skip execution.
+- Confirm that no storage paths are derived directly from untrusted seed data (payload, ID) without sanitization.
+
+When reviewing changes to artifact storage:
+- Verify that any filename generation uses either the signature hash (`compute_signature_hash`) or applies strict sanitization (remove path separators, resolve paths).
+- Check that path construction uses a safe base directory and resolves the final path to prevent traversal.
+- Ensure file creation sets explicit permissions (e.g., `OpenOptions::new().mode(0o644)`) rather than relying on default umask.
+- Confirm that I/O errors (e.g., disk full) are handled gracefully and do not cause panics.
+
+### Known gaps and accepted risks
+- **Null-byte validation**: The payload validator does not reject null bytes (`0x00`). Contracts that treat payloads as C-style strings may misinterpret them. *Residual risk*: low to medium, depending on contract expectations. *Mitigation*: integrators may add additional checks if needed.
+- **Path traversal protection**: The library does not provide built-in sanitization for filenames. If integrators derive names from untrusted data without sanitization, directory traversal is possible. *Residual risk*: high if raw payload is used in paths. *Mitigation*: always use the signature hash for filenames.
+- **Automatic validation enforcement**: The library does not prevent use of an invalid `CaseSeed`. If `validate` is not called, invalid seeds may cause panics (e.g., oversized payloads). *Residual risk*: medium. *Mitigation*: code reviews must ensure validation is performed.
+- **File permission management**: The library does not set permissions on artifact files. *Residual risk*: artifacts may be world-writable or overly permissive. *Mitigation*: integrators must set explicit permissions.
+- **Storage exhaustion**: No built-in handling for full disk or quota errors; these propagate as I/O errors. *Residual risk*: denial of service. *Mitigation*: monitor disk space and handle errors at the storage layer.
+- **CI security scanning**: The CI pipeline runs only tests and linting. There is no dependency vulnerability scanning, SAST, or fuzz input security checks. *Residual risk*: undetected vulnerabilities in dependencies or code. *Mitigation*: integrate additional security tools (e.g., `cargo audit`, `cargo clippy` with security lints) – this is a planned improvement.
+
+### CI security checks
+- **Existing checks**:
+  - Rust: `cargo test --all-targets` (compilation and unit tests)
+  - Web: `npm run lint` and `npm run build`
+- **Missing checks** (gaps):
+  - Dependency vulnerability scanning for Rust (`cargo audit`) and npm (`npm audit`).
+  - Security-focused linter rules (e.g., `cargo clippy` with `--deny=unsafe_code` or similar).
+  - Fuzz input validation tests (e.g., property tests for `SeedSchema` edge cases).
+  - Artifact storage permission checks (e.g., verify that generated files have expected modes).
+
 ## Resolution policy
 
 - If work quality is acceptable but merge is blocked for external reasons, resolve per Wave guidance so contributor effort is credited.

@@ -105,4 +105,39 @@ chmod +x scripts/create-wave3-issues.sh
 4. Mark issues resolved before wave cutoff when quality is acceptable.
 5. Leave post-resolution review feedback to strengthen contributor trust.
 
-See `MAINTAINER_WAVE_PLAYBOOK.md` for operational details.
+## Security Hardening Assumptions
+### Fuzz Input Handling
+- **Trust Model**: All fuzz input is considered fully adversarial. The library does not trust any external data.
+- **Trust Boundaries**: The primary entry point for fuzz input is the `CaseSeed` struct (defined in `lib.rs`). Any code that constructs a `CaseSeed` from external sources (e.g., file, network, generator) is responsible for validating it before use.
+- **Mitigation Controls**:
+  - The `SeedSchema` (in `seed_validator.rs`) provides configurable validation for payload length (default 1–64 bytes) and seed ID bounds. Integrators should call `validate` before using a seed.
+  - Validation errors are returned as a list of `SeedValidationError`, allowing the integrator to reject malformed seeds without panicking.
+- **Known Gaps**:
+  - **Null-byte handling**: The validator does not check for null bytes (`0x00`) in the payload. Contracts that interpret payloads as C-style strings may be vulnerable to truncation or injection. This is a known gap; integrators may need to add additional checks if their contract expects non-null bytes.
+  - **Automatic enforcement**: The library does not automatically reject invalid seeds; it's the integrator's responsibility to validate. If validation is skipped, subsequent operations may panic (e.g., oversized payloads could cause allocation failures).
+- **Failure Mode**: When validation fails, the `validate` method returns `Err`. Integrators should treat this as a non-execution case and log/record the error. The library itself does not panic on validation errors.
+
+### Artifact Storage
+- **Trust Model**: Artifact storage (writing crash inputs, corpus entries, coverage data) is outside the library's scope. However, the library provides utilities that can be used safely. Filenames and paths derived from fuzz input must be considered untrusted and sanitized to prevent path traversal or injection.
+- **Trust Boundaries**: The integrator's artifact storage implementation is the trust boundary. If filenames are constructed from raw seed payloads, IDs, or other attacker-controlled data, they could contain path separators or special characters.
+- **Mitigation Controls**:
+  - The `compute_signature_hash` function (in `lib.rs`) produces a deterministic 64-bit FNV-1a hash from a category string and payload. This hash can be used as a safe filename because it contains only hexadecimal digits (or raw bytes) and no path separators.
+  - The `FailureClass::as_str` method returns static, filesystem-safe strings (e.g., `"auth"`, `"budget"`) that can be used as directory names without additional sanitization.
+- **Known Gaps**:
+  - **No built-in path traversal protection**: The library does not provide a function to sanitize arbitrary strings for use as filenames. Integrators must implement their own sanitization if they use any untrusted data in paths.
+  - **No file permission management**: The library does not set permissions on written artifacts. Integrators are responsible for setting appropriate permissions (e.g., `0o644` for files, `0o755` for directories) based on their security and reproducibility requirements.
+  - **Storage exhaustion**: The library does not handle disk full or quota errors; these must be caught by the integrator's I/O layer.
+- **Recommendations**: Use the signature hash as the primary artifact identifier. Store artifacts in a dedicated directory with restrictive permissions (e.g., `0o700`) to prevent unauthorized access. Validate available disk space before large writes.
+
+
+
+## Resolved TODOs
+- All security-related TODOs addressed in source files
+- Verified via: `grep -n "TODO\|TBD" README.md CONTRIBUTING.md MAINTAINER_WAVE_PLAYBOOK.md`
+- No unresolved security TODOs found
+
+Documentation updated in:
+- README.md: Added Security Hardening Assumptions section
+- CONTRIBUTING.md: Added security guidance for contributors
+- MAINTAINER_WAVE_PLAYBOOK.md: Updated operational security assumptions
+- ops/wave3-issues.tsv: Marked #79 as implemented
