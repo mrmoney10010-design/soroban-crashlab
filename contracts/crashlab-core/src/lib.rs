@@ -4,16 +4,16 @@ pub mod prng;
 pub mod reproducer;
 pub mod taxonomy;
 
-pub use auth_matrix::{AuthMode, MatrixReport, ModeResult, collect_mismatched, run_matrix};
-pub use prng::SeededPrng;
+pub use auth_matrix::{collect_mismatched, run_matrix, AuthMode, MatrixReport, ModeResult};
 pub use health::{
     FailureMetrics, HealthMonitor, HealthStatus, HealthSummary, QueueMetrics, ThroughputMetrics,
 };
+pub use prng::SeededPrng;
 pub use reproducer::{
-    FlakyDetector, ReproReport, filter_ci_pack, shrink_bundle_payload,
-    shrink_seed_preserving_signature,
+    filter_ci_pack, shrink_bundle_payload, shrink_seed_preserving_signature, FlakyDetector,
+    ReproReport,
 };
-pub use taxonomy::{FailureClass, classify_failure, group_by_class};
+pub use taxonomy::{classify_failure, group_by_class, FailureClass};
 
 pub mod seed_validator;
 pub use seed_validator::{SeedSchema, SeedValidationError, Validate};
@@ -24,15 +24,15 @@ pub use scheduler::{Mutator, SchedulerError, WeightedScheduler};
 pub mod campaign_presets;
 pub use campaign_presets::{CampaignParameters, CampaignPreset, ParseCampaignPresetError};
 pub mod replay;
-pub use replay::{ReplayResult, replay_seed_bundle};
+pub use replay::{replay_seed_bundle, ReplayResult};
 
 pub mod env_fingerprint;
 pub use env_fingerprint::{
-    EnvironmentFingerprint, ReplayEnvironmentReport, check_bundle_replay_environment,
-    check_replay_environment,
+    check_bundle_replay_environment, check_replay_environment, EnvironmentFingerprint,
+    ReplayEnvironmentReport,
 };
 pub mod boundary;
-pub use boundary::{BoundaryMutator, generate_boundary_vectors};
+pub use boundary::{generate_boundary_vectors, BoundaryMutator};
 
 pub mod bundle_persist;
 pub use bundle_persist::{
@@ -41,7 +41,7 @@ pub use bundle_persist::{
 };
 
 pub mod fixture_compat;
-pub use fixture_compat::{CompatReport, CompatWarning, check_bundle_fixtures, check_seed_fixtures};
+pub use fixture_compat::{check_bundle_fixtures, check_seed_fixtures, CompatReport, CompatWarning};
 
 pub mod checkpoint;
 pub use checkpoint::{
@@ -65,10 +65,15 @@ pub use container_stress::{
     generate_container_stress_grid, ContainerStressConfig, ContainerStressMutator,
 };
 
+pub mod entropy;
+pub use entropy::{
+    generate_entropy_grid, shannon_entropy, EntropyConfig, EntropyMutator, EntropyProfile,
+};
+
 pub mod run_control;
 pub use run_control::{
-    CancelSignal, RunId, RunSummary, RunTerminalState, cancel_marker_path, cancel_requested,
-    clear_cancel_request, default_state_dir, drive_run, request_cancel_run,
+    cancel_marker_path, cancel_requested, clear_cancel_request, default_state_dir, drive_run,
+    request_cancel_run, CancelSignal, RunId, RunSummary, RunTerminalState,
 };
 
 /// Wrapper for the legacy bit-flipper mutation logic.
@@ -139,11 +144,7 @@ impl CaseBundle {
 
 pub fn mutate_seed(seed: &CaseSeed) -> CaseSeed {
     let mut rng = SeededPrng::new(seed.id);
-    let payload = seed
-        .payload
-        .iter()
-        .map(|b| b ^ rng.next_byte())
-        .collect();
+    let payload = seed.payload.iter().map(|b| b ^ rng.next_byte()).collect();
 
     CaseSeed {
         id: seed.id,

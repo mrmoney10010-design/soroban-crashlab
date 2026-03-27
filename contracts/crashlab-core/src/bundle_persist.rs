@@ -90,9 +90,7 @@ impl CaseBundleDocument {
     /// Converts this document into a [`CaseBundle`] after validating `schema`.
     pub fn into_bundle(self) -> Result<CaseBundle, BundlePersistError> {
         if !SUPPORTED_BUNDLE_SCHEMAS.contains(&self.schema) {
-            return Err(BundlePersistError::UnsupportedSchema {
-                found: self.schema,
-            });
+            return Err(BundlePersistError::UnsupportedSchema { found: self.schema });
         }
         Ok(CaseBundle {
             seed: self.seed,

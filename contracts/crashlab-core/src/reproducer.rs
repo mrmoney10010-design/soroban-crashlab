@@ -190,7 +190,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CaseSeed, CrashSignature, to_bundle};
+    use crate::{to_bundle, CaseSeed, CrashSignature};
     use std::cell::Cell;
 
     fn make_bundle(id: u64, payload: Vec<u8>) -> CaseBundle {

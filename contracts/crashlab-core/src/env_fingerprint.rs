@@ -201,8 +201,7 @@ mod tests {
             id: 1,
             payload: vec![1],
         };
-        let recorded_fp =
-            EnvironmentFingerprint::new("linux", "x86_64", "unix", "0.1.0");
+        let recorded_fp = EnvironmentFingerprint::new("linux", "x86_64", "unix", "0.1.0");
         let bundle = CaseBundle {
             seed,
             signature: CrashSignature {

@@ -4,7 +4,8 @@
 //! [`CrashSignature`](crate::CrashSignature) with category `"timeout"` so runs
 //! can be triaged like other failure classes.
 
-use crate::{CaseSeed, CrashSignature, compute_signature_hash};
+use crate::entropy::EntropyProfile;
+use crate::{compute_signature_hash, CaseSeed, CrashSignature};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::thread;
@@ -27,24 +28,30 @@ impl SimulationTimeoutConfig {
 pub struct RunMetadata {
     /// Active simulation timeout used for this run (milliseconds).
     pub simulation_timeout_ms: u64,
+    /// Entropy profile used for payload generation, if configured.
+    pub entropy_profile: Option<EntropyProfile>,
 }
 
 impl RunMetadata {
     pub fn from_timeout_config(cfg: &SimulationTimeoutConfig) -> Self {
         Self {
             simulation_timeout_ms: cfg.timeout_ms,
+            entropy_profile: None,
         }
+    }
+
+    pub fn with_entropy_profile(mut self, profile: EntropyProfile) -> Self {
+        self.entropy_profile = Some(profile);
+        self
     }
 }
 
 /// Builds the crash signature used when a simulation hits the timeout wall.
 pub fn timeout_crash_signature(seed: &CaseSeed) -> CrashSignature {
     let category = "timeout";
-    let digest = seed
-        .payload
-        .iter()
-        .fold(seed.id, |acc, b| acc.wrapping_mul(1099511628211).wrapping_add(*b as u64))
-        ^ 0x7F4A_7C15_4E3F_4E3Fu64;
+    let digest = seed.payload.iter().fold(seed.id, |acc, b| {
+        acc.wrapping_mul(1099511628211).wrapping_add(*b as u64)
+    }) ^ 0x7F4A_7C15_4E3F_4E3Fu64;
     let signature_hash = compute_signature_hash(category, &seed.payload);
     CrashSignature {
         category: category.to_string(),
@@ -134,5 +141,14 @@ mod tests {
         let cfg = SimulationTimeoutConfig::new(1234);
         let meta = RunMetadata::from_timeout_config(&cfg);
         assert_eq!(meta.simulation_timeout_ms, 1234);
+        assert!(meta.entropy_profile.is_none());
+    }
+
+    #[test]
+    fn run_metadata_carries_entropy_profile() {
+        let cfg = SimulationTimeoutConfig::new(500);
+        let meta =
+            RunMetadata::from_timeout_config(&cfg).with_entropy_profile(EntropyProfile::High);
+        assert_eq!(meta.entropy_profile, Some(EntropyProfile::High));
     }
 }
