@@ -65,6 +65,12 @@ pub use container_stress::{
     generate_container_stress_grid, ContainerStressConfig, ContainerStressMutator,
 };
 
+pub mod run_control;
+pub use run_control::{
+    CancelSignal, RunId, RunSummary, RunTerminalState, cancel_marker_path, cancel_requested,
+    clear_cancel_request, default_state_dir, drive_run, request_cancel_run,
+};
+
 /// Wrapper for the legacy bit-flipper mutation logic.
 pub struct DefaultMutator;
 
